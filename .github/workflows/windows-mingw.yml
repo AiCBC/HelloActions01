@@ -117,8 +117,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: svenstaro/upload-release-action@v2
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          repo_token: ${{ secrets.PAT_TOKEN }}           # 自己创建的 PAT Token
           file: ${{ steps.package.outputs.packageName }}.zip
           asset_name: ${{ steps.package.outputs.packageName }}.zip
-          tag: ${{ github.ref }}
+          tag: ${{ github.ref_name }}                     # 纯标签名
           overwrite: true
+
