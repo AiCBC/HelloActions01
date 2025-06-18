@@ -37,7 +37,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      # 2. 安装 Qt
+      # 2. 安装 Qt 工具链
       - name: Install Qt ${{ matrix.qt_ver }} with MinGW
         uses: jurplel/install-qt-action@v3
         with:
@@ -56,21 +56,21 @@ jobs:
           Write-Output "${{ env.Qt5_DIR }}/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           Write-Output "${{ env.Qt5_DIR }}/../../Tools/${{ matrix.qt_tools_mingw_install }}/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      # 4. 查看 qmake 和 mingw32-make 路径，方便调试
+      # 4. 显示工具路径（用于调试）
       - name: Show qmake and mingw32-make path
         shell: pwsh
         run: |
           Get-Command qmake | Format-List
           Get-Command mingw32-make | Format-List
 
-      # 5. 编译项目
+      # 5. 使用 qmake + mingw32-make 编译
       - name: Build with qmake and mingw32-make
         shell: cmd
         run: |
           qmake
           mingw32-make
 
-      # 6. 打包，内联 PowerShell 脚本执行
+      # 6. 打包产物（内联 PowerShell 脚本）
       - name: Package build output
         id: package
         env:
@@ -78,40 +78,40 @@ jobs:
           targetName: ${{ env.targetName }}
         shell: pwsh
         run: |
-          # 清理旧的打包目录
+          # 删除旧目录
           if (Test-Path $env:archiveName) {
             Remove-Item -Recurse -Force $env:archiveName
           }
 
           # 创建新目录
-          New-Item -ItemType Directory -Path $env:archiveName
+          New-Item -ItemType Directory -Path $env:archiveName | Out-Null
 
-          # 拷贝可执行文件
-          Copy-Item -Path "bin\release\$env:targetName" -Destination $env:archiveName
+          # 拷贝构建的 .exe 文件
+          Copy-Item -Path "bin\release\$env:targetName" -Destination "$env:archiveName"
 
-          # 复制 Qt 依赖
+          # 调用 windeployqt 复制依赖
           windeployqt --qmldir . --plugindir "$env:archiveName\plugins" --no-translations --compiler-runtime "$env:archiveName\$env:targetName"
 
-          # 删除无用文件
+          # 删除不必要文件
           $excludeList = @("*.qmlc", "*.ilk", "*.exp", "*.lib", "*.pdb")
           foreach ($pattern in $excludeList) {
-            Get-ChildItem -Path $env:archiveName -Filter $pattern -Recurse | Remove-Item -Force
+            Get-ChildItem -Path $env:archiveName -Recurse -Include $pattern | Remove-Item -Force
           }
 
-          # 压缩为 zip 文件
-          Compress-Archive -Path $env:archiveName -DestinationPath "$($env:archiveName).zip"
+          # 压缩为 zip 包
+          Compress-Archive -Path "$env:archiveName" -DestinationPath "$env:archiveName.zip"
 
-          # 输出包名，供后续步骤使用
+          # 输出变量供后续步骤引用
           echo "packageName=$($env:archiveName)" >> $GITHUB_OUTPUT
 
-      # 7. 上传构建产物
+      # 7. 上传打包后的 zip 文件
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.package.outputs.packageName }}
           path: ${{ steps.package.outputs.packageName }}.zip
 
-      # 8. Tag 推送时自动创建 Release 并上传 zip 包
+      # 8. 若为 tag 推送，则创建 Release 并上传 zip
       - name: Create GitHub Release and upload artifact
         if: startsWith(github.ref, 'refs/tags/')
         uses: svenstaro/upload-release-action@v2
