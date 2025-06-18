@@ -27,7 +27,7 @@ jobs:
           # 以下略去注释重复部分，建议保留前几项注释参考
           - qt_arch: win64_mingw73
             qt_ver: 5.14.2
-            qt_tools: "tools_mingw,7.3.0-1-202004170606,qt.tools.win64_mingw730"
+            qt_tools: 'tools_mingw'
             qt_tools_mingw_install: mingw730_6
 
     env:
