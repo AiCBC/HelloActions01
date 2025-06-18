@@ -89,16 +89,17 @@ jobs:
         id: tag
         if: success()
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           TAG_NAME="v$(date +'%Y%m%d-%H%M')"
           git tag "$TAG_NAME"
-          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}"
+          git remote set-url origin "https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}"
           git push origin "$TAG_NAME"
           echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
+
 
       - name: Create GitHub Release and upload artifact
         uses: svenstaro/upload-release-action@v2
