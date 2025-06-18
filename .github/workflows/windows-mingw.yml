@@ -21,17 +21,17 @@ jobs:
         include:
           - qt_arch: win64_mingw73
             qt_ver: 5.14.2
-            qt_tools: "tools_mingw,7.3.0-9"
+            qt_tools: "tools_mingw,7.3.0-1-202004170606"
             qt_tools_mingw_install: mingw730_64
 
     env:
       targetName: HelloActions-Qt.exe    # 目标可执行文件名
 
     steps:
-      - name: Setup Python 3.12
+      - name: Setup Python 3.8
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12.10'
+          python-version: '3.8.10'
       - name: Install Qt             # 安装 Qt 及对应工具链
         uses: jurplel/install-qt-action@v4
         with:
