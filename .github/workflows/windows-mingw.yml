@@ -1,8 +1,8 @@
-# 工作流名称：Windows MinGW
-name: Windows MinGW
+# 文件路径：.github/workflows/windows-mingw.yml
 
-# 触发条件：当 .pro 文件、src 文件夹或当前 workflow 文件变动时触发
-on: 
+name: Windows MinGW Qt Build & Release
+
+on:
   push:
     paths:
       - '*.pro'
@@ -12,96 +12,108 @@ on:
     paths:
       - '*.pro'
       - 'src/**'
-      - '.github/workflows/windows-mingw.yml' 
+      - '.github/workflows/windows-mingw.yml'
 
 jobs:
   build:
-    name: Build  # 任务名称
-    runs-on: windows-2019  # 使用的操作系统版本
+    name: Build Qt Project with MinGW
+    runs-on: windows-2019
 
     strategy:
       matrix:
         include:
-          # Qt 5.9.9 ~ 6.2.2 不同版本 + MinGW 构建配置（根据实际需要裁剪）
-          # 每组包含 Qt 版本、MinGW 工具链、Qt 架构名等信息
-          # 以下略去注释重复部分，建议保留前几项注释参考
           - qt_arch: win64_mingw73
             qt_ver: 5.14.2
-            qt_tools: 'tools_mingw'
+            qt_tools: tools_mingw
             qt_tools_mingw_install: mingw730_6
 
     env:
-      targetName: HelloActions-Qt.exe  # 最终构建出的程序名称
+      targetName: HelloActions-Qt.exe  # 最终生成的可执行文件名
 
     steps:
-      # 安装 Qt（使用 jurplel/install-qt-action@v2）
-      - name: Install Qt
+      # 1. 拉取源码
+      - name: Checkout source code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      # 2. 安装 Qt
+      - name: Install Qt ${{ matrix.qt_ver }} with MinGW
         uses: jurplel/install-qt-action@v3
         with:
           version: ${{ matrix.qt_ver }}
           aqtversion: '==3.1.*'
           arch: ${{ matrix.qt_arch }}
           tools: ${{ matrix.qt_tools }}
-          host: 'windows'
-          target: 'desktop'
+          host: windows
+          target: desktop
 
-      # 拉取源码
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 1
-
-      # Qt5 环境变量配置
-      - name: Qt 5 environment configuration
-        if: ${{ startsWith( matrix.qt_ver, 5 ) }}
+      # 3. 配置 Qt5 环境变量
+      - name: Configure Qt 5 environment variables
+        if: startsWith(matrix.qt_ver, '5')
         shell: pwsh
         run: |
           Write-Output "${{ env.Qt5_DIR }}/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           Write-Output "${{ env.Qt5_DIR }}/../../Tools/${{ matrix.qt_tools_mingw_install }}/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      # Qt6 环境变量配置
-      - name: Qt 6 environment configuration
-        if: ${{ startsWith( matrix.qt_ver, 6 ) }}
+      # 4. 查看 qmake 和 mingw32-make 路径，方便调试
+      - name: Show qmake and mingw32-make path
         shell: pwsh
         run: |
-          Write-Output "${{ env.Qt6_DIR }}/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          Write-Output "${{ env.Qt6_DIR }}/../../Tools/${{ matrix.qt_tools_mingw_install }}/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Get-Command qmake | Format-List
+          Get-Command mingw32-make | Format-List
 
-      # 查看 qmake 和 mingw32-make 的路径，便于调试
-      - name: where is qmake & where is mingw32-make
-        shell: pwsh
-        run: |
-          Get-Command -Name 'qmake' | Format-List
-          Get-Command -Name 'mingw32-make' | Format-List
-
-      # 编译项目（使用 qmake + mingw32-make）
-      - name: mingw-build
-        id: build
+      # 5. 编译项目
+      - name: Build with qmake and mingw32-make
         shell: cmd
         run: |
           qmake
           mingw32-make
 
-      # 打包阶段，使用自定义 PowerShell 脚本打包为 zip
-      - name: package
+      # 6. 打包，内联 PowerShell 脚本执行
+      - name: Package build output
         id: package
         env:
-          archiveName: ${{ matrix.qt_ver }}-${{ matrix.qt_target }}-${{ matrix.qt_arch }}
+          archiveName: ${{ matrix.qt_ver }}-${{ matrix.qt_arch }}
+          targetName: ${{ env.targetName }}
         shell: pwsh
         run: |
-          & scripts\windows-mingw-publish.ps1 ${env:archiveName} ${env:targetName}
-          $name = ${env:archiveName}
-          echo "packageName=$name" >> $GITHUB_OUTPUT
+          # 清理旧的打包目录
+          if (Test-Path $env:archiveName) {
+            Remove-Item -Recurse -Force $env:archiveName
+          }
 
+          # 创建新目录
+          New-Item -ItemType Directory -Path $env:archiveName
 
-      # 上传 artifact 到 GitHub Actions
-      - uses: actions/upload-artifact@v4
+          # 拷贝可执行文件
+          Copy-Item -Path "bin\release\$env:targetName" -Destination $env:archiveName
+
+          # 复制 Qt 依赖
+          windeployqt --qmldir . --plugindir "$env:archiveName\plugins" --no-translations --compiler-runtime "$env:archiveName\$env:targetName"
+
+          # 删除无用文件
+          $excludeList = @("*.qmlc", "*.ilk", "*.exp", "*.lib", "*.pdb")
+          foreach ($pattern in $excludeList) {
+            Get-ChildItem -Path $env:archiveName -Filter $pattern -Recurse | Remove-Item -Force
+          }
+
+          # 压缩为 zip 文件
+          Compress-Archive -Path $env:archiveName -DestinationPath "$($env:archiveName).zip"
+
+          # 输出包名，供后续步骤使用
+          echo "packageName=$($env:archiveName)" >> $GITHUB_OUTPUT
+
+      # 7. 上传构建产物
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.package.outputs.packageName }}
-          path: ${{ steps.package.outputs.packageName }}
+          path: ${{ steps.package.outputs.packageName }}.zip
 
-      # 如果是 tag 推送则自动发布 release
-      - name: uploadRelease
-        if: startsWith(github.event.ref, 'refs/tags/')
+      # 8. Tag 推送时自动创建 Release 并上传 zip 包
+      - name: Create GitHub Release and upload artifact
+        if: startsWith(github.ref, 'refs/tags/')
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
