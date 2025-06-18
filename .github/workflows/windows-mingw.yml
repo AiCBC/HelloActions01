@@ -1,56 +1,110 @@
-name: Build and Release
+# 工作流名称：Windows MinGW
+name: Windows MinGW
 
-# Will trigger when a commit is tagged 'v*' (v1.0.0 for example)
-on:
+# 触发条件：当 .pro 文件、src 文件夹或当前 workflow 文件变动时触发
+on: 
   push:
-    tags:
-      - 'v*'
+    paths:
+      - '*.pro'
+      - 'src/**'
+      - '.github/workflows/windows-mingw.yml'
+  pull_request:
+    paths:
+      - '*.pro'
+      - 'src/**'
+      - '.github/workflows/windows-mingw.yml' 
 
 jobs:
   build:
-    name: Build, package, release
-    runs-on: ubuntu-24.04
+    name: Build  # 任务名称
+    runs-on: windows-2019  # 使用的操作系统版本
+
+    strategy:
+      matrix:
+        include:
+          # Qt 5.9.9 ~ 6.2.2 不同版本 + MinGW 构建配置（根据实际需要裁剪）
+          # 每组包含 Qt 版本、MinGW 工具链、Qt 架构名等信息
+          # 以下略去注释重复部分，建议保留前几项注释参考
+          - qt_arch: win64_mingw73
+            qt_ver: 5.14.2
+            qt_tools: "tools_mingw,7.3.0-1-202004170606,qt.tools.win64_mingw730"
+            qt_tools_mingw_install: mingw730_6
+
+    env:
+      targetName: HelloActions-Qt.exe  # 最终构建出的程序名称
+
     steps:
-      # Checkout your repo
-      - uses: actions/checkout@v4
-
-      # Install Qt
+      # 安装 Qt（使用 jurplel/install-qt-action@v2）
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4.2.1
+        uses: jurplel/install-qt-action@v3
         with:
-          version: '6.8.3'
+          version: ${{ matrix.qt_ver }}
+          aqtversion: '==3.1.*'
+          arch: ${{ matrix.qt_arch }}
+          tools: ${{ matrix.qt_tools }}
+          host: 'windows'
+          target: 'desktop'
 
-      # Build and install your project
-      - name: Build project
+      # 拉取源码
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      # Qt5 环境变量配置
+      - name: Qt 5 environment configuration
+        if: ${{ startsWith( matrix.qt_ver, 5 ) }}
+        shell: pwsh
         run: |
-         cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(readlink -f ./install)
-         cmake --build build
-         cmake --install build
+          Write-Output "${{ env.Qt5_DIR }}/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Write-Output "${{ env.Qt5_DIR }}/../../Tools/${{ matrix.qt_tools_mingw_install }}/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      # Package into .AppImage
-      - name: Create AppImage
-        id: appimage
-        uses: Kidev/qt-appimage@v1
-        with:
-          install_folder: './install'
-          app_name: 'MyApplication'
-          comment: 'An awesome Qt application'
-          category: 'Graphics'
-          icon: './icon.png'
-          binary: 'myapp'
+      # Qt6 环境变量配置
+      - name: Qt 6 environment configuration
+        if: ${{ startsWith( matrix.qt_ver, 6 ) }}
+        shell: pwsh
+        run: |
+          Write-Output "${{ env.Qt6_DIR }}/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Write-Output "${{ env.Qt6_DIR }}/../../Tools/${{ matrix.qt_tools_mingw_install }}/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      # Extract version from the commit tag
-      - name: Get Version
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      # 查看 qmake 和 mingw32-make 的路径，便于调试
+      - name: where is qmake & where is mingw32-make
+        shell: pwsh
+        run: |
+          Get-Command -Name 'qmake' | Format-List
+          Get-Command -Name 'mingw32-make' | Format-List
 
-      # Create release and upload AppImage
-      - name: Create and Upload Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ steps.appimage.outputs.appimage }}
-          name: MyApplication ${{ steps.get_version.outputs.VERSION }}
-          draft: false
-          prerelease: false
+      # 编译项目（使用 qmake + mingw32-make）
+      - name: mingw-build
+        id: build
+        shell: cmd
+        run: |
+          qmake
+          mingw32-make
+
+      # 打包阶段，使用自定义 PowerShell 脚本打包为 zip
+      - name: package
+        id: package
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          archiveName: ${{ matrix.qt_ver }}-${{ matrix.qt_target }}-${{ matrix.qt_arch }}
+        shell: pwsh
+        run: |
+          & scripts\windows-mingw-publish.ps1 ${env:archiveName} ${env:targetName}
+          $name = ${env:archiveName}
+          echo "::set-output name=packageName::$name"
+
+      # 上传 artifact 到 GitHub Actions
+      - uses: actions/upload-artifact@v2
+        with:
+          name: ${{ steps.package.outputs.packageName }}
+          path: ${{ steps.package.outputs.packageName }}
+
+      # 如果是 tag 推送则自动发布 release
+      - name: uploadRelease
+        if: startsWith(github.event.ref, 'refs/tags/')
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ steps.package.outputs.packageName }}.zip
+          asset_name: ${{ steps.package.outputs.packageName }}.zip
+          tag: ${{ github.ref }}
+          overwrite: true
