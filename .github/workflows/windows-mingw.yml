@@ -15,7 +15,7 @@ on:
 jobs:
   build:
     name: Build Qt Project with MinGW
-    runs-on: windows-2022
+    runs-on: windows-2019
 
     strategy:
       matrix:
@@ -31,8 +31,6 @@ jobs:
     steps:
       - name: Checkout source code
         uses: actions/checkout@v2
-        with:
-          fetch-depth: 1
 
       - name: Install Qt ${{ matrix.qt_ver }} with MinGW
         uses: jurplel/install-qt-action@v3
@@ -70,9 +68,7 @@ jobs:
           targetName: ${{ env.targetName }}
         shell: pwsh
         run: |
-          if (Test-Path $env:archiveName) {
-            Remove-Item -Recurse -Force $env:archiveName
-          }
+          if (Test-Path $env:archiveName) { Remove-Item -Recurse -Force $env:archiveName }
           New-Item -ItemType Directory -Path $env:archiveName
           Copy-Item -Path "bin\release\$env:targetName" -Destination $env:archiveName
           windeployqt --qmldir . --plugindir "$env:archiveName\plugins" --no-translations --compiler-runtime "$env:archiveName\$env:targetName"
@@ -81,7 +77,7 @@ jobs:
             Get-ChildItem -Path $env:archiveName -Filter $pattern -Recurse | Remove-Item -Force
           }
           Compress-Archive -Path $env:archiveName -DestinationPath "$($env:archiveName).zip"
-          echo "packageName=$($env:archiveName)" >> $env:GITHUB_OUTPUT
+          echo "packageName=$($env:archiveName)" >> $GITHUB_OUTPUT
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -89,26 +85,25 @@ jobs:
           name: ${{ steps.package.outputs.packageName }}
           path: ${{ steps.package.outputs.packageName }}.zip
 
-      # ✅ 自动生成 Tag（基于时间）
       - name: Create and push tag
         id: tag
         if: success()
         env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          TAG_NAME=v$(date +"%Y%m%d-%H%M")
-          git tag $TAG_NAME
-          git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}
-          git push origin $TAG_NAME
-          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          TAG_NAME="v$(date +'%Y%m%d-%H%M')"
+          git tag "$TAG_NAME"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}"
+          git push origin "$TAG_NAME"
+          echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release and upload artifact
         uses: svenstaro/upload-release-action@v2
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          repo_token: ${{ secrets.PAT_TOKEN }}
           file: ${{ steps.package.outputs.packageName }}.zip
           asset_name: ${{ steps.package.outputs.packageName }}.zip
           tag: ${{ steps.tag.outputs.tag }}
