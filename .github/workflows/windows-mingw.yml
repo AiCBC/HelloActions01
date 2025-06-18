@@ -116,7 +116,7 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           TAG="v$(date +'%Y%m%d-%H%M%S')"
           git tag $TAG
-          git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/AiCBC/HelloActions01.git
+          git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com:AiCBC/HelloActions01.git
           git push origin $TAG
         # 第七步：构建成功后，自动创建一个时间戳格式的 Git 标签（tag），
         # 并推送到远程仓库（需预先在 Secrets 配置 PAT_TOKEN 用于身份验证）
