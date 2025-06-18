@@ -90,7 +90,7 @@ jobs:
         run: |
           & scripts\windows-mingw-publish.ps1 ${env:archiveName} ${env:targetName}
           $name = ${env:archiveName}
-          echo "::set-output name=packageName::$name"
+          echo "{packageName}={$name}" >> $GITHUB_OUTPUT
 
       # 上传 artifact 到 GitHub Actions
       - uses: actions/upload-artifact@v4
