@@ -17,7 +17,7 @@ on:
 jobs:
   build:
     name: Build Qt Project with MinGW
-    runs-on: windows-2019
+    runs-on: windows-2022
 
     strategy:
       matrix:
