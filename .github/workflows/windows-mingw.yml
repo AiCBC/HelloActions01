@@ -21,35 +21,13 @@ jobs:
         include:
           - qt_arch: win64_mingw73
             qt_ver: 5.14.2
-            qt_tools: "tools_mingw, 7.3.0-1-201903151311"  
+            qt_tools: "tools_mingw,7.3.0-1-202004170606"  
             qt_tools_mingw_install: mingw730_64
 
     env:
       targetName: HelloActions-Qt.exe    # 目标可执行文件名
 
     steps:
-
-      # ---------------------- 新增步骤：列出可用 Qt 工具版本 ----------------------
-      - name: List available Qt tools
-        shell: bash  # 使用 bash 执行命令（Windows 环境默认支持）
-        run: |
-          # 安装 aqtinstall 工具
-          pip install aqtinstall
-           
-          # 列出 Windows 桌面端所有可用工具（含 MinGW、CMake 等）
-          echo "========== 所有可用工具 =========="
-            # 列出Windows桌面端所有工具（含MinGW）
-          aqt list-tool windows desktop --base https://download.qt.io/
-
-          # 筛选仅MinGW工具
-          aqt list-tool windows desktop tools_mingw --base https://download.qt.io/
-                    
-          # 筛选仅 MinGW 工具（可选，根据需求调整）
-          echo "========== 仅 MinGW 工具 =========="
-          aqt list-tool windows desktop tools_mingw
-      # -------------------------------------------------------------------------
-
-
 
       - name: Setup Python 3.10
         uses: actions/setup-python@v5
