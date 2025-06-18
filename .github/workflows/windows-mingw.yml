@@ -102,7 +102,8 @@ jobs:
           Compress-Archive -Path "$env:archiveName" -DestinationPath "$env:archiveName.zip"
 
           # 输出变量供后续步骤引用
-          echo "packageName=$($env:archiveName)" >> $GITHUB_OUTPUT
+          "packageName=$($env:archiveName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          
 
       # 7. 上传打包后的 zip 文件
       - name: Upload build artifact
