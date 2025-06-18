@@ -94,11 +94,10 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          TAG_NAME="v$(date +'%Y%m%d-%H%M')"
-          git tag "$TAG_NAME"
-          git remote set-url origin "https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}"
-          git push origin "$TAG_NAME"
-          echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          TAG="v$(date +'%Y%m%d-%H%M%S')"
+          git tag $TAG
+          git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/AiCBC/HelloActions01.git
+          git push origin $TAG
 
 
       - name: Create GitHub Release and upload artifact
