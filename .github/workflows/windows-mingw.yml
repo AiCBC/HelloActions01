@@ -1,89 +1,109 @@
 name: Windows MinGW Qt Build & Release
+# 工作流名称，标识这是一个用于 Windows 平台、使用 MinGW 编译 Qt 项目的构建与发布流程
 
 on:
   push:
     paths:
-      - '*.pro'
-      - 'src/**'
-      - '.github/workflows/windows-mingw.yml'
+      - '*.pro'                      # 当根目录下的任何 .pro 文件发生变化时触发构建
+      - 'src/**'                    # 当 src 目录下任何文件变化时触发
+      - '.github/workflows/windows-mingw.yml'  # 当这个 workflow 配置文件本身变化时触发
   pull_request:
     paths:
-      - '*.pro'
-      - 'src/**'
-      - '.github/workflows/windows-mingw.yml'
+      - '*.pro'                    # PR 提交时，如果 .pro 文件变化触发
+      - 'src/**'                  # PR 提交时，如果 src 目录下文件变化触发
+      - '.github/workflows/windows-mingw.yml'  # PR 提交时，如果 workflow 配置变化触发
 
 jobs:
   build:
     name: Build Qt Project with MinGW
+    # 任务名称，表示使用 MinGW 编译 Qt 项目
+
     runs-on: windows-2019
+    # 在 Windows Server 2019 虚拟环境上运行该任务
 
     strategy:
       matrix:
         include:
-          - qt_arch: win64_mingw73
-            qt_ver: 5.14.2
-            qt_tools: tools_mingw
+          - qt_arch: win64_mingw73        # Qt 架构，64位，MinGW 7.3.0
+            qt_ver: 5.14.2                # Qt 版本 5.14.2
+            qt_tools: tools_mingw         # 需要安装的工具集，MinGW 工具
             qt_tools_mingw_install: mingw730_6
+            # MinGW 安装目录后缀，配合环境变量配置路径
 
     env:
       targetName: HelloActions-Qt.exe
+      # 设置目标可执行文件名，方便后续使用
 
     steps:
       - name: Checkout source code
         uses: actions/checkout@v2
+        # 第一步：检出当前仓库的源代码到 Runner 工作目录
 
       - name: Install Qt ${{ matrix.qt_ver }} with MinGW
         uses: jurplel/install-qt-action@v3
         with:
-          version: ${{ matrix.qt_ver }}
-          aqtversion: '==3.1.*'
-          arch: ${{ matrix.qt_arch }}
-          tools: ${{ matrix.qt_tools }}
-          host: windows
-          target: desktop
+          version: ${{ matrix.qt_ver }}        # 使用 matrix 中指定的 Qt 版本
+          aqtversion: '==3.1.*'                # 指定 aqtinstall 的版本（用于下载 Qt）
+          arch: ${{ matrix.qt_arch }}          # Qt 架构
+          tools: ${{ matrix.qt_tools }}        # 需要安装的工具
+          host: windows                       # 主机平台 Windows
+          target: desktop                     # 目标平台桌面
+        # 第二步：安装指定版本和架构的 Qt 以及对应的 MinGW 工具链
 
       - name: Configure Qt 5 environment variables
-        if: startsWith(matrix.qt_ver, '5')
-        shell: pwsh
+        if: startsWith(matrix.qt_ver, '5')   # 仅 Qt5 系列版本执行
+        shell: pwsh                         # 使用 PowerShell
         run: |
           Write-Output "${{ env.Qt5_DIR }}/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           Write-Output "${{ env.Qt5_DIR }}/../../Tools/${{ matrix.qt_tools_mingw_install }}/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        # 第三步：将 Qt5 和 MinGW 工具链的 bin 目录路径加入环境变量 PATH，
+        # 以便后续调用 qmake 和 mingw32-make 命令时能够找到
 
       - name: Show qmake and mingw32-make path
         shell: pwsh
         run: |
           Get-Command qmake | Format-List
           Get-Command mingw32-make | Format-List
+        # 第四步：打印 qmake 和 mingw32-make 命令的路径，方便调试确认环境配置是否正确
 
       - name: Build with qmake and mingw32-make
         shell: cmd
         run: |
           qmake
           mingw32-make
+        # 第五步：调用 qmake 生成 Makefile，然后用 mingw32-make 编译项目
 
       - name: Package build output
         id: package
         env:
-          archiveName: ${{ matrix.qt_ver }}-${{ matrix.qt_arch }}
-          targetName: ${{ env.targetName }}
+          archiveName: ${{ matrix.qt_ver }}-${{ matrix.qt_arch }}    # 打包文件夹名称
+          targetName: ${{ env.targetName }}                           # 可执行文件名
         shell: pwsh
         run: |
           if (Test-Path $env:archiveName) { Remove-Item -Recurse -Force $env:archiveName }
+          # 如果打包文件夹已存在则删除，确保干净的打包目录
           New-Item -ItemType Directory -Path $env:archiveName
+          # 新建打包目录
           Copy-Item -Path "bin\release\$env:targetName" -Destination $env:archiveName
+          # 复制编译产物（可执行文件）到打包目录
           windeployqt --qmldir . --plugindir "$env:archiveName\plugins" --no-translations --compiler-runtime "$env:archiveName\$env:targetName"
+          # 使用 windeployqt 部署 Qt 运行时依赖到打包目录中
           $excludeList = @("*.qmlc", "*.ilk", "*.exp", "*.lib", "*.pdb")
           foreach ($pattern in $excludeList) {
             Get-ChildItem -Path $env:archiveName -Filter $pattern -Recurse | Remove-Item -Force
           }
+          # 删除一些不必要的文件（qmlc 编译缓存，中间文件，调试符号等）
           Compress-Archive -Path $env:archiveName -DestinationPath "$($env:archiveName).zip"
+          # 将打包目录压缩成 zip 文件
           echo "packageName=$($env:archiveName)" >> $GITHUB_OUTPUT
+          # 输出打包文件名作为后续步骤的输入
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.package.outputs.packageName }}
           path: ${{ steps.package.outputs.packageName }}.zip
+        # 第六步：将打包的 zip 文件上传为 GitHub Actions 的构建产物，方便下载和保存
 
       - name: Create and push tag
         id: tag
@@ -98,7 +118,8 @@ jobs:
           git tag $TAG
           git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/AiCBC/HelloActions01.git
           git push origin $TAG
-
+        # 第七步：构建成功后，自动创建一个时间戳格式的 Git 标签（tag），
+        # 并推送到远程仓库（需预先在 Secrets 配置 PAT_TOKEN 用于身份验证）
 
       - name: Create GitHub Release and upload artifact
         uses: svenstaro/upload-release-action@v2
@@ -108,3 +129,5 @@ jobs:
           asset_name: ${{ steps.package.outputs.packageName }}.zip
           tag: ${{ steps.tag.outputs.tag }}
           overwrite: true
+        # 第八步：基于刚刚创建的 tag，自动创建一个 GitHub Release，
+        # 并将之前打包好的 zip 文件上传为 Release 的附件，方便用户下载
