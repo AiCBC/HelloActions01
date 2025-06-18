@@ -1,39 +1,56 @@
-name: Build Qt Project on Windows with jurplel/install-qt-action
+name: Build and Release
 
+# Will trigger when a commit is tagged 'v*' (v1.0.0 for example)
 on:
   push:
-    branches:
-      - master
-  pull_request:
+    tags:
+      - 'v*'
 
 jobs:
   build:
-    runs-on: windows-latest
-
+    name: Build, package, release
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      # Checkout your repo
+      - uses: actions/checkout@v4
 
-      - name: Setup Qt
-        uses: jurplel/install-qt-action@v2
+      # Install Qt
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4.2.1
         with:
-          version: '6.5.0'           # Qt版本
-          host: 'windows'            # 主机系统
-          target: 'desktop'          # 目标平台
-          arch: 'msvc_2019_64'       # MSVC 2019 64位编译器
+          version: '6.8.3'
 
-      - name: Configure with qmake
-        shell: cmd
+      # Build and install your project
+      - name: Build project
         run: |
-          qmake YourProject.pro -r
+         cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(readlink -f ./install)
+         cmake --build build
+         cmake --install build
 
-      - name: Build with MSVC
-        shell: cmd
-        run: |
-          msbuild YourProject.sln /p:Configuration=Release /m
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+      # Package into .AppImage
+      - name: Create AppImage
+        id: appimage
+        uses: Kidev/qt-appimage@v1
         with:
-          name: build-release
-          path: path\to\your\exe\folder\*.exe
+          install_folder: './install'
+          app_name: 'MyApplication'
+          comment: 'An awesome Qt application'
+          category: 'Graphics'
+          icon: './icon.png'
+          binary: 'myapp'
+
+      # Extract version from the commit tag
+      - name: Get Version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      # Create release and upload AppImage
+      - name: Create and Upload Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.appimage.outputs.appimage }}
+          name: MyApplication ${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
