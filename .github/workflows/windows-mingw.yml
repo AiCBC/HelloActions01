@@ -38,15 +38,15 @@ jobs:
            
           # 列出 Windows 桌面端所有可用工具（含 MinGW、CMake 等）
           echo "========== 所有可用工具 =========="
-          aqt list-tool windows desktop
+          # 列出所有Windows桌面端可用工具（含MinGW）
+          aqt list-tool windows desktop --base https://mirrors.ustc.edu.cn/qtproject/
+
+          # 筛选仅MinGW工具（更精准）
+          aqt list-tool windows desktop tools_mingw --base https://mirrors.ustc.edu.cn/qtproject/
           
           # 筛选仅 MinGW 工具（可选，根据需求调整）
           echo "========== 仅 MinGW 工具 =========="
           aqt list-tool windows desktop tools_mingw
-          
-          # 若网络慢，可使用国内镜像源（如腾讯云）加速
-          echo "========== 使用镜像源的 MinGW 工具 =========="
-          aqt list-tool windows desktop tools_mingw --base https://mirrors.cloud.tencent.com/qt/
       # -------------------------------------------------------------------------
 
 
