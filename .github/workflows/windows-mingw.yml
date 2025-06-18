@@ -14,7 +14,7 @@ on:
 jobs:
   build:
     name: Build               # 任务名称
-    runs-on: windows-2019     # 运行环境是 Windows Server 2019
+    runs-on: windows-2022    # 运行环境是 Windows Server 2019
 
     strategy:
       matrix:                 # 矩阵策略，定义多组编译参数，做多版本多架构的测试
