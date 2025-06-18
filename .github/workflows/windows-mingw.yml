@@ -28,6 +28,29 @@ jobs:
       targetName: HelloActions-Qt.exe    # 目标可执行文件名
 
     steps:
+
+      # ---------------------- 新增步骤：列出可用 Qt 工具版本 ----------------------
+      - name: List available Qt tools
+        shell: bash  # 使用 bash 执行命令（Windows 环境默认支持）
+        run: |
+          # 安装 aqtinstall 工具
+          pip install aqtinstall
+           
+          # 列出 Windows 桌面端所有可用工具（含 MinGW、CMake 等）
+          echo "========== 所有可用工具 =========="
+          aqt list-tool windows desktop
+          
+          # 筛选仅 MinGW 工具（可选，根据需求调整）
+          echo "========== 仅 MinGW 工具 =========="
+          aqt list-tool windows desktop tools_mingw
+          
+          # 若网络慢，可使用国内镜像源（如腾讯云）加速
+          echo "========== 使用镜像源的 MinGW 工具 =========="
+          aqt list-tool windows desktop tools_mingw --base https://mirrors.cloud.tencent.com/qt/
+      # -------------------------------------------------------------------------
+
+
+
       - name: Setup Python 3.10
         uses: actions/setup-python@v5
         with:
