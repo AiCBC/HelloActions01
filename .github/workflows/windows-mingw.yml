@@ -1,9 +1,39 @@
-- name: Build AppImage
-  uses: Kidev/qt-appimage@v1
-  with:
-    install_folder: './install'   # Required: Path to folder where Qt installed your project
-    app_name: 'MyApp'             # Optional: App name (deduced from binary if not set)
-    comment: 'My awesome Qt app'  # Optional: Desktop entry comment
-    category: 'Graphics'          # Optional: Desktop category (default: Utility)
-    icon: 'path/to/icon.png'      # Optional: Path to icon file
-    binary: 'myapp'               # Optional: Binary name (auto-detected if not set)
+name: Build Qt Project on Windows with jurplel/install-qt-action
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Qt
+        uses: jurplel/install-qt-action@v2
+        with:
+          version: '6.5.0'           # Qt版本
+          host: 'windows'            # 主机系统
+          target: 'desktop'          # 目标平台
+          arch: 'msvc_2019_64'       # MSVC 2019 64位编译器
+
+      - name: Configure with qmake
+        shell: cmd
+        run: |
+          qmake YourProject.pro -r
+
+      - name: Build with MSVC
+        shell: cmd
+        run: |
+          msbuild YourProject.sln /p:Configuration=Release /m
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-release
+          path: path\to\your\exe\folder\*.exe
