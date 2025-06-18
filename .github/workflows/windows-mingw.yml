@@ -1,42 +1,50 @@
-name: Build and Release on Push
+name: Static Qt Build (MinGW 7.3.0)
 
 on:
   push:
     branches:
-      - master       # 你可以改成你使用的分支，比如 master
+      - master
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout source code
+    - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install Qt 5.14.2 (MinGW)
-      uses: jurplel/install-qt-action@v3
+    - name: Install 7-Zip
+      uses: crazy-max/ghaction-chocolatey@v3
       with:
-        version: '5.14.2'
-        arch: 'win64_mingw81'
-        modules: 'qttools qtwidgets'
+        args: install 7zip
 
-    - name: Build with qmake + mingw32-make
+    - name: Download static Qt build
       run: |
-        qmake
-        mingw32-make
+        curl -L -o qt-static.zip https://github.com/youruser/yourrepo/releases/download/qt-static/qt-5.14.2-static-mingw730.zip
+        7z x qt-static.zip -oQtStatic
+        echo "QT_STATIC_PATH=$env:GITHUB_WORKSPACE\QtStatic" >> $env:GITHUB_ENV
+
+    - name: Add Qt tools and MinGW 7.3.0 to PATH
+      run: |
+        echo "$env:QT_STATIC_PATH\bin" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
+        echo "C:\mingw730\bin" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
+
+    - name: Build Qt project statically
+      run: |
+        qmake CONFIG+=static CONFIG+=release
+        mingw32-make -j4
 
     - name: Prepare release folder
       run: |
         mkdir release
         copy release\*.exe release\
 
-    - name: Upload release artifact to GitHub Release
+    - name: Upload Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: main-latest               # 使用固定 tag，防止堆积多个 release
-        name: "Auto Release from Main"
+        tag_name: main-latest
+        name: "Auto Release (Static Build)"
         files: release/*.exe
-        draft: false
-        prerelease: true                    # 设为预发布
+        prerelease: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
